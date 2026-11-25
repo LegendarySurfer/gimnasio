@@ -212,7 +212,7 @@ select.txt{appearance:none;-webkit-appearance:none;padding-right:38px;background
 .modal{position:fixed;inset:0;z-index:50;background:rgba(10,12,14,.5);display:grid;place-items:center;padding:20px}
 .modal-card{background:var(--surface);border-radius:16px;padding:20px;max-width:400px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,.3)}
 .modal-card p{color:var(--muted)}
-.modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
+.modal-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px;margin-top:18px}
 .sheet{position:fixed;inset:0;z-index:40;background:var(--bg);overflow-y:auto;-webkit-overflow-scrolling:touch;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 .sheet-head{position:sticky;top:0;z-index:2;background:var(--bg);border-bottom:1px solid var(--line)}
 .sheet-head-in{max-width:680px;margin:0 auto;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;padding:10px 12px}
@@ -293,7 +293,7 @@ select.txt{appearance:none;-webkit-appearance:none;padding-right:38px;background
 <div id="modal" class="modal" hidden>
   <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="mTitle">
     <h2 id="mTitle"></h2><p id="mBody"></p>
-    <div class="modal-actions"><button id="mCancel" class="btn ghost"></button><button id="mOk" class="btn primary"></button></div>
+    <div class="modal-actions"><button id="mCancel" class="btn ghost"></button><button id="mAlt" class="btn" hidden></button><button id="mOk" class="btn primary"></button></div>
   </div>
 </div>
 
@@ -397,7 +397,7 @@ const P = {ex:null, metric:'max'};   // estado de Progreso
 function save(commit = true) { if (commit) M.lastChange = Date.now(); writeJSON(KEY, S); writeJSON(MKEY, M); updateDot(); scheduleAuto(); }
 function saveMeta() { writeJSON(MKEY, M); updateDot(); }
 const pending = () => M.lastChange > M.lastExport && (S.routines.length || S.workouts.length);
-function updateDot() { const t = $('#tabData'); t.classList.toggle('pending', !!pending()); t.title = pending() ? 'Hay cambios sin guardar en archivo' : ''; }
+function updateDot() { const t = $('#tabData'); t.classList.toggle('pending', !!pending()); t.title = pending() ? 'Copia en archivo desactualizada (los datos de la app están guardados)' : ''; }
 
 /* ---------- Utilidades de datos ---------- */
 const sameName = (a, b) => a.toLowerCase() === b.toLowerCase();
@@ -687,9 +687,10 @@ function renderData() {
   if (!storageOK) h += `<p class="warn">Este navegador no deja guardar datos en la página. Guarda una copia en archivo antes de cerrarla.</p>`;
   h += `<section class="panel"><h2>Tus datos en local</h2>
     <p>${M.lastExport ? `Última copia guardada: <b>${esc(dTime.format(new Date(M.lastExport)))}</b>` : 'Aún no has guardado ninguna copia en archivo.'}</p>
-    ${pending() ? `<p class="warn">Hay cambios que todavía no están en ningún archivo.</p>` : ''}
+    ${pending() ? `<p class="warn">Tus datos están guardados en la app. Solo la copia en archivo es de antes de los últimos cambios: pulsa «Guardar app con tus datos» si quieres actualizarla.</p>` : ''}
     <div class="stack"><button class="btn primary wide" data-act="export-html">Guardar app con tus datos (.html)</button><button class="btn wide" data-act="export">Guardar solo los datos (.json)</button><button class="btn wide" data-act="import">Cargar datos desde archivo</button></div>
-    <p class="muted small">En este navegador: ${S.routines.length} ${S.routines.length === 1 ? 'rutina' : 'rutinas'} y ${S.workouts.length} ${S.workouts.length === 1 ? 'entreno' : 'entrenos'}.</p></section>
+    <p class="muted small">En este navegador: ${S.routines.length} ${S.routines.length === 1 ? 'rutina' : 'rutinas'} y ${S.workouts.length} ${S.workouts.length === 1 ? 'entreno' : 'entrenos'}.</p>
+    <p class="muted small">Almacenamiento: ${PERSIST === true ? 'protegido, el sistema no lo borra por falta de espacio' : PERSIST === false ? 'sin proteger, el sistema podría borrarlo si falta espacio' : 'sin comprobar'}.</p></section>
     <section class="panel"><h2>Usar la app en local</h2><ol class="steps">
       <li>Pulsa <b>Guardar app con tus datos</b>. Es un único archivo con la app, las fotos y tus datos.</li>
       <li>Guárdalo en tu carpeta con el mismo nombre, sustituyendo el anterior. Si se abre el menú de compartir, elige <b>Guardar en Archivos</b>.</li>
@@ -812,15 +813,16 @@ function saveEditor() {
 
 /* ---------- Modal y avisos ---------- */
 let modalClose = null;
-function ask({title, body, ok = 'Aceptar', cancel = 'Cancelar', danger = false}) {
+function ask({title, body, ok = 'Aceptar', cancel = 'Cancelar', alt = null, danger = false}) {
   return new Promise(res => {
     $('#mTitle').textContent = title; $('#mBody').textContent = body;
-    const bo = $('#mOk'), bc = $('#mCancel');
+    const bo = $('#mOk'), bc = $('#mCancel'), ba = $('#mAlt');
     bo.textContent = ok; bo.className = 'btn ' + (danger ? 'danger-solid' : 'primary');
     bc.textContent = cancel || ''; bc.hidden = !cancel;
+    ba.textContent = alt || ''; ba.hidden = !alt;
     $('#modal').hidden = false; bo.focus();
-    modalClose = v => { $('#modal').hidden = true; bo.onclick = bc.onclick = null; modalClose = null; res(v); };
-    bo.onclick = () => modalClose(true); bc.onclick = () => modalClose(false);
+    modalClose = v => { $('#modal').hidden = true; bo.onclick = bc.onclick = ba.onclick = null; modalClose = null; res(v); };
+    bo.onclick = () => modalClose(true); bc.onclick = () => modalClose(false); ba.onclick = () => modalClose('alt');
   });
 }
 let toastT = null;
@@ -917,7 +919,7 @@ function autoPanel() {
     if (fhPerm === 'granted') return `<p>Cada cambio se guarda solo en <b>${esc(FH.name)}</b>.</p><div class="row"><button class="btn small" data-act="auto-pick">Cambiar archivo</button><button class="btn small ghost danger" data-act="auto-stop">Desactivar</button></div>`;
     return `<p class="warn">En pausa: el navegador vuelve a pedir permiso al abrir la página.</p><div class="row"><button class="btn primary small" data-act="auto-resume">Reactivar</button><button class="btn small ghost danger" data-act="auto-stop">Desactivar</button></div>`;
   }
-  return `<p class="muted small">Este navegador no permite escribir solo en un archivo. Lo más parecido: al terminar un entreno o guardar una rutina se abre directamente el guardado del archivo.</p>
+  return `<p class="muted small">Este navegador no permite escribir solo en un archivo. Lo más parecido: al terminar o borrar un entreno, y al guardar o borrar una rutina, se abre directamente el guardado del archivo.</p>
     <div class="seg">${[['1','Activado'],['0','Desactivado']].map(([k, l]) => `<button data-act="auto-prompt" data-v="${k}" aria-pressed="${(M.autoPrompt !== false) === (k === '1')}">${l}</button>`).join('')}</div>`;
 }
 
@@ -963,6 +965,16 @@ async function fallbackExport(name, data, done, type) {
     toast('Si no aparece la descarga, este navegador o visor no permite guardar archivos');
   } catch (e) { toast('No se ha podido crear el archivo'); }
 }
+// Une los datos de un archivo con los actuales sin borrar nada de aquí
+function mergeData(cur, inc) {
+  const out = {version:1, routines:[...cur.routines], workouts:[...cur.workouts], active:cur.active || inc.active || null};
+  const map = {};
+  inc.routines.forEach(r => { const ex = out.routines.find(x => x.id === r.id || sameName(x.name, r.name)); if (ex) map[r.id] = ex.id; else out.routines.push(r); });
+  const ids = new Set(out.workouts.map(w => w.id));
+  inc.workouts.forEach(w => { if (!ids.has(w.id)) out.workouts.push(w.routineId && map[w.routineId] ? {...w, routineId:map[w.routineId]} : w); });
+  out.workouts.sort((a, b) => a.date < b.date ? -1 : 1);
+  return out;
+}
 $('#importFile').addEventListener('change', async e => {
   const f = e.target.files && e.target.files[0]; e.target.value = '';
   if (!f) return;
@@ -982,9 +994,13 @@ $('#importFile').addEventListener('change', async e => {
     d = obj ? normalize(obj) : null;
   } catch (err) { d = null; }
   if (!d) { await ask({title:'No se han podido cargar los datos', body:`${why}. Archivo: ${f.name} (${Math.round(f.size / 1024)} KB).`, ok:'Entendido', cancel:null}); return; }
-  const ok = await ask({title:'Cargar copia', body:`El archivo tiene ${d.routines.length} rutinas y ${d.workouts.length} entrenos. Sustituirá lo que hay ahora en este navegador.`, ok:'Cargar'});
-  if (!ok) return;
-  S = d; stopRest(); M.lastExport = M.lastChange = Date.now(); save(false); render(); toast('Copia cargada');
+  const hasData = S.routines.length || S.workouts.length;
+  const choice = !hasData
+    ? await ask({title:'Cargar datos', body:`El archivo tiene ${d.routines.length} rutinas y ${d.workouts.length} entrenos.`, ok:'Cargar'})
+    : await ask({title:'Cargar datos', body:`El archivo tiene ${d.routines.length} rutinas y ${d.workouts.length} entrenos; aquí hay ${S.routines.length} y ${S.workouts.length}. Combinar añade lo que falta aquí sin borrar nada (si borraste algo aquí y está en el archivo, volverá). Sustituir deja solo lo del archivo.`, ok:'Combinar', alt:'Sustituir'});
+  if (!choice) return;
+  if (choice === true && hasData) { S = mergeData(S, d); save(); render(); toast('Datos combinados'); return; }
+  S = d; stopRest(); M.lastExport = M.lastChange = Date.now(); save(false); render(); toast('Datos cargados');
 });
 
 /* ---------- Acciones ---------- */
@@ -1069,7 +1085,7 @@ document.addEventListener('click', async e => {
       unlockAudio(); save(false); M.tab = 'train'; saveMeta(); render(); window.scrollTo(0, 0); break;
     }
     case 'w-del':
-      if (await ask({title:'Eliminar entreno', body:'Se borrará este entreno del historial y de las gráficas.', ok:'Eliminar', danger:true})) { S.workouts = S.workouts.filter(x => x.id !== id); save(); render(); }
+      if (await ask({title:'Eliminar entreno', body:'Se borrará este entreno del historial y de las gráficas.', ok:'Eliminar', danger:true})) { S.workouts = S.workouts.filter(x => x.id !== id); save(); render(); toast('Entreno eliminado'); afterCommit(); }
       break;
     case 'metric': P.metric = b.dataset.m; render(); break;
     case 'pt': {
@@ -1153,8 +1169,14 @@ setInterval(() => {
 
 function applyTheme() { const r = document.documentElement; if (M.theme === 'auto') delete r.dataset.theme; else r.dataset.theme = M.theme; }
 
+let PERSIST = null;
 applyTheme();
 render();
+// Pedir almacenamiento persistente (WebKit lo concede sobre todo a las apps de la pantalla de inicio)
+if (navigator.storage && navigator.storage.persist) {
+  navigator.storage.persisted().then(p => p || navigator.storage.persist())
+    .then(p => { PERSIST = !!p; if (M.tab === 'data') render(); }).catch(() => {});
+}
 if (FS_OK) idbGet('fh').then(async h => {
   if (!h) return;
   FH = h;
